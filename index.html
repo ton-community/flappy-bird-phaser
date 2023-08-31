@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <title>Test</title>
+        <meta charset="utf8">
+        <style>
+            html, body {
+                margin: 0;
+                overflow: hidden;
+                width: 100%;
+                height: 100%;
+            }
+
+            #overlay {
+                z-index: 1;
+                position: absolute;
+                width: 100%;
+                height: 100%;
+                flex-direction: column;
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+            }
+
+            #play {
+                background-color: aqua;
+                margin-bottom: 50px;
+                height: 60px;
+                font-size: 40px;
+                border-radius: 10px;
+                border: none;
+                display: none;
+            }
+        </style>
+        <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    </head>
+    <body>
+        <div id="overlay">
+            <div id="overlay-top"></div>
+            <div id="overlay-mid">
+                <div id="connect"></div>
+            </div>
+            <div id="overlay-bottom">
+                <button id="play">PLAY</button>
+            </div>
+        </div>
+        <script src="/bundle.js"></script>
+    </body>
+</html>
