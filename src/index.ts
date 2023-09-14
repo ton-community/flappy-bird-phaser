@@ -27,6 +27,25 @@ const INITIAL_COLUMN_INTERVAL = 3000;
 
 let firstLaunch = true;
 
+const achievements: { [k: string]: string } = {
+    'first-time': 'Played 1 time',
+    'five-times': 'Played 5 times',
+};
+
+async function submitPlayed(score: number) {
+    return await (await fetch('https://flappy.krigga.dev/played', {
+        body: JSON.stringify({
+            tg_data: (window as any).Telegram.WebApp.initData,
+            wallet: tc.account?.address,
+            score,
+        }),
+        headers: {
+            'content-type': 'application/json',
+        },
+        method: 'POST',
+    })).json();
+}
+
 class MyScene extends Phaser.Scene {
     character!: Phaser.GameObjects.Image;
     columnGroup!: Phaser.Physics.Arcade.Group;
@@ -34,16 +53,20 @@ class MyScene extends Phaser.Scene {
     columnVelocity = INITIAL_COLUMN_VELOCITY;
     tracked: { r1: Phaser.GameObjects.Image, r2: Phaser.GameObjects.Image, scored: boolean }[] = [];
     score: number = 0;
-    scoreText!: Phaser.GameObjects.Text;
     columnInterval = INITIAL_COLUMN_INTERVAL;
     lastColumn = 0;
     background!: Phaser.GameObjects.TileSprite;
+    scoreText!: HTMLDivElement;
 
     constructor() {
         super();
 
+        this.scoreText = document.getElementById('score') as HTMLDivElement;
+
         document.getElementById('play')!.addEventListener('click', () => {
-            document.getElementById('overlay')!.style.display = 'none';
+            this.scoreText.innerText = '0';
+            document.getElementById('rewards')!.style.display = 'none';
+            document.getElementById('play')!.style.display = 'none';
             document.getElementById('play')!.innerText = 'PLAY AGAIN';
             this.scene.restart();
         });
@@ -65,11 +88,6 @@ class MyScene extends Phaser.Scene {
         const realWidth = this.getRealGameWidth();
         this.background = this.add.tileSprite(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 'bg');
         this.background.tileScaleX = this.background.tileScaleY = GAME_HEIGHT / BG_HEIGHT;
-        this.scoreText = this.add.text(realWidth / 2, GAME_HEIGHT / 12, '0', {
-            fontSize: GAME_HEIGHT / 15,
-        });
-        this.scoreText.setDepth(1000);
-        this.scoreText.setOrigin(0.5, 0.5);
         this.character = this.add.image(realWidth / 8, GAME_HEIGHT / 2, 'bird-mid');
         this.physics.add.existing(this.character);
         this.columnGroup = this.physics.add.group();
@@ -107,26 +125,27 @@ class MyScene extends Phaser.Scene {
         }
     }
 
-    onOverlapped() {
-        const gameOverText = this.add.text(this.getRealGameWidth() / 2, GAME_HEIGHT / 2, 'GAME OVER', {
-            fontSize: GAME_HEIGHT / 12,
-        });
-        gameOverText.setDepth(999);
-        gameOverText.setOrigin(0.5, 0.5);
+    async onOverlapped() {
         this.scene.pause();
-        document.getElementById('overlay')!.style.display = 'flex';
 
-        fetch('https://flappy.krigga.dev/played', {
-            body: JSON.stringify({
-                tg_data: (window as any).Telegram.WebApp.initData,
-                wallet: tc.account?.address,
-                score: this.score,
-            }),
-            headers: {
-                'content-type': 'application/json',
-            },
-            method: 'POST',
-        });
+        document.getElementById('spinner-container')!.style.display = 'unset';
+
+        try {
+            const playedInfo = await submitPlayed(this.score) as any;
+            if (!playedInfo.ok) throw new Error('Unsuccessful');
+
+            const rewardsDiv = document.getElementById('rewards')!;
+            rewardsDiv.innerText = 'GAME OVER!\n' + (playedInfo.achievements.length > 0 ? ((playedInfo.achievements.length === 1 ? 'New achievement!' : 'New achievements!') + '\n' + playedInfo.achievements.map((a: string) => achievements[a] + '\n') + '\n') : '') + 'Tokens awarded: ' + playedInfo.reward;
+            rewardsDiv.style.display = 'inline-block';
+        } catch (e) {
+            console.error(e);
+            const rewardsDiv = document.getElementById('rewards')!;
+            rewardsDiv.innerText = 'Could not load your rewards information';
+            rewardsDiv.style.display = 'inline-block';
+        }
+
+        document.getElementById('spinner-container')!.style.display = 'none';
+        document.getElementById('play')!.style.display = 'unset';
     }
 
     update(time: number, delta: number): void {
@@ -151,7 +170,7 @@ class MyScene extends Phaser.Scene {
             if (!t.scored && t.r1.x + PIPE_WIDTH / 2 < (this.character.body as Phaser.Physics.Arcade.Body).x - (this.character.body as Phaser.Physics.Arcade.Body).width / 2) {
                 t.scored = true;
                 this.score++;
-                this.scoreText.setText(this.score.toString());
+                this.scoreText.innerText = this.score.toString();
             }
             if (t.r1.x < -PIPE_WIDTH / 2) {
                 this.tracked.splice(i, 1);
