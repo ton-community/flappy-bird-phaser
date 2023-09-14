@@ -1,50 +1,121 @@
 <!DOCTYPE html>
 <html lang="en">
-    <head>
-        <title>Test</title>
-        <meta charset="utf8">
-        <meta name="viewport" content="width=device-width; initial-scale=1.0; maximum-scale=1.0; user-scalable=0" />
-        <style>
-            html, body {
-                margin: 0;
-                overflow: hidden;
-                width: 100%;
-                height: 100%;
-            }
+<head>
+    <title>Flappy Bird</title>
+    <meta charset="utf8">
+    <meta name="viewport" content="width=device-width; initial-scale=1.0; maximum-scale=1.0; user-scalable=0" />
+    <style>
+        html, body {
+            margin: 0;
+            overflow: hidden;
+            width: 100%;
+            height: 100%;
+        }
 
-            #overlay {
-                z-index: 1;
-                position: absolute;
-                width: 100%;
-                height: 100%;
-                flex-direction: column;
-                display: flex;
-                align-items: center;
-                justify-content: space-between;
-            }
+        #overlay {
+            z-index: 1;
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            flex-direction: column;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            pointer-events: none;
+        }
 
-            #play {
-                background-color: aqua;
-                margin-bottom: 50px;
-                height: 60px;
-                font-size: 40px;
-                border-radius: 10px;
-                border: none;
-                display: none;
+        #overlay-bottom {
+            pointer-events: auto;
+        }
+
+        #score {
+            color: white;
+            font-size: 10vh;
+            font-family: Arial, Helvetica, sans-serif;
+            margin-top: 30px;
+            text-align: center;
+            display: inline-block;
+        }
+
+        #rewards {
+            display: inline-block;
+            color: white;
+            font-family: Arial, Helvetica, sans-serif;
+            font-size: 30px;
+            text-align: center;
+        }
+
+        #play {
+            background-color: #0098EA;
+            margin-bottom: 50px;
+            height: 60px;
+            font-size: 40px;
+            border-radius: 10px;
+            border: none;
+            display: none;
+            padding: 10px;
+        }
+
+        #rewards {
+            display: none;
+        }
+
+        #spinner-container {
+            display: none;
+        }
+
+        .lds-ring {
+            display: inline-block;
+            position: relative;
+            width: 80px;
+            height: 80px;
+        }
+        .lds-ring div {
+            box-sizing: border-box;
+            display: block;
+            position: absolute;
+            width: 64px;
+            height: 64px;
+            margin: 8px;
+            border: 8px solid #fff;
+            border-radius: 50%;
+            animation: lds-ring 1.2s cubic-bezier(0.5, 0, 0.5, 1) infinite;
+            border-color: #fff transparent transparent transparent;
+        }
+        .lds-ring div:nth-child(1) {
+            animation-delay: -0.45s;
+        }
+        .lds-ring div:nth-child(2) {
+            animation-delay: -0.3s;
+        }
+        .lds-ring div:nth-child(3) {
+            animation-delay: -0.15s;
+        }
+        @keyframes lds-ring {
+            0% {
+                transform: rotate(0deg);
             }
-        </style>
-        <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    </head>
-    <body>
-        <div id="overlay">
-            <div id="overlay-top"></div>
-            <div id="overlay-mid">
-                <div id="connect"></div>
-            </div>
-            <div id="overlay-bottom">
-                <button id="play">PLAY</button>
-            </div>
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+    </style>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+    <div id="overlay">
+        <div id="overlay-top">
+            <div id="score">0</div>
         </div>
-        <script src="bundle.js"></script>
-    </body>
+        <div id="overlay-mid">
+            <div id="rewards"></div>
+            <div id="spinner-container"><div class="lds-ring"><div></div><div></div><div></div><div></div></div></div>
+            <div id="connect"></div>
+        </div>
+        <div id="overlay-bottom">
+            <button id="play">PLAY</button>
+        </div>
+    </div>
+    <script src="bundle.js"></script>
+</body>
 </html>
