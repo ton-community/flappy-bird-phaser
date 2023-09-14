@@ -206,6 +206,7 @@ tc.onStatusChange((wallet) => {
     if (game === null && wallet !== null) {
         document.getElementById('connect')!.style.display = 'none';
         document.getElementById('play')!.style.display = 'unset';
+        document.getElementById('score')!.style.display = 'inline-block';
         game = new Phaser.Game({
             type: Phaser.AUTO,
             height: GAME_HEIGHT,
