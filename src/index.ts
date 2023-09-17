@@ -1,5 +1,215 @@
 import * as Phaser from 'phaser';
 import { TonConnectUI } from '@tonconnect/ui';
+import { Address, beginCell } from '@ton/core';
+import { getHttpV4Endpoint } from '@orbs-network/ton-access';
+import { TonClient4 } from '@ton/ton';
+
+const PIPES_AVAILABLE = ['pipe-green', 'pipe-red'];
+const PIPES_COSTS = [0, 1];
+const ENDPOINT = 'https://flappy.krigga.dev';
+const TOKEN_RECIPIENT = 'EQBb7bFnXnKAN1DNO3GPKLXPNiEyi4U6-805Y-aBkgJtK_lJ';
+const TOKEN_MASTER = 'EQBcRUiCkgdfnbnKKYhnPXkNi9BXkq_5uLGRuvnwwaZzelit';
+const NETWORK = 'testnet';
+
+const SHOP_RELOAD_INTERVAL = 10000;
+
+class UI {
+    scoreDiv: HTMLDivElement = document.getElementById('score') as HTMLDivElement;
+    rewardsDiv: HTMLDivElement = document.getElementById('rewards') as HTMLDivElement;
+    spinnerDiv: HTMLDivElement = document.getElementById('spinner-container') as HTMLDivElement;
+    connectDiv: HTMLDivElement = document.getElementById('connect') as HTMLDivElement;
+    skinChooserDiv: HTMLDivElement = document.getElementById('skin-chooser') as HTMLDivElement;
+    skinPrevDiv: HTMLDivElement = document.getElementById('skin-prev') as HTMLDivElement;
+    skinCurrentDiv: HTMLDivElement = document.getElementById('skin-current') as HTMLDivElement;
+    skinImage: HTMLImageElement = document.getElementById('skin-image') as HTMLImageElement;
+    skinNextDiv: HTMLDivElement = document.getElementById('skin-next') as HTMLDivElement;
+    useButton: HTMLButtonElement = document.getElementById('use') as HTMLButtonElement;
+    shopButton: HTMLButtonElement = document.getElementById('shop') as HTMLButtonElement;
+    playButton: HTMLButtonElement = document.getElementById('play') as HTMLButtonElement;
+    buttonsDiv: HTMLDivElement = document.getElementById('buttons') as HTMLDivElement;
+
+    currentPipeIndex = Number(window.localStorage.getItem('chosen-pipe') ?? '0');
+    previewPipeIndex = this.currentPipeIndex;
+
+    shopShown = false;
+
+    purchases: { systemName: string }[] = [];
+
+    reloadShopTimeout: any = undefined;
+
+    client: TonClient4 | undefined = undefined;
+    jettonWallet: Address | undefined = undefined;
+
+    async getJettonWallet() {
+        if (this.jettonWallet === undefined) {
+            const client = await this.getClient();
+            const lastBlock = await client.getLastBlock();
+            const r = await client.runMethod(lastBlock.last.seqno, Address.parse(TOKEN_MASTER), 'get_wallet_address', [{
+                type: 'slice',
+                cell: beginCell().storeAddress(Address.parse(tc.account!.address)).endCell(),
+            }]);
+            const addrItem = r.result[0];
+            if (addrItem.type !== 'slice') throw new Error('Bad type');
+            this.jettonWallet = addrItem.cell.beginParse().loadAddress();
+        }
+        return this.jettonWallet;
+    }
+
+    async getClient() {
+        if (this.client === undefined) {
+            this.client = new TonClient4({
+                endpoint: await getHttpV4Endpoint({ network: NETWORK }),
+            });
+        }
+        return this.client;
+    }
+
+    async buy(itemId: number) {
+        await tc.sendTransaction({
+            validUntil: Math.floor(Date.now() / 1000) + 3600,
+            messages: [
+                {
+                    address: (await this.getJettonWallet()).toString(),
+                    amount: '50000000',
+                    payload: beginCell().storeUint(0x0f8a7ea5, 32).storeUint(0, 64).storeCoins(PIPES_COSTS[this.previewPipeIndex]).storeAddress(Address.parse(TOKEN_RECIPIENT)).storeAddress(Address.parse(tc.account!.address)).storeMaybeRef(undefined).storeCoins(1).storeMaybeRef(beginCell().storeUint(0, 32).storeStringTail((window as any).Telegram.WebApp.initDataUnsafe.user.id + ':' + itemId)).endCell().toBoc().toString('base64'),
+                },
+            ],
+        })
+    }
+
+    constructor() {
+        this.skinPrevDiv.addEventListener('click', () => {
+            this.previewPipeIndex--;
+            this.redrawShop();
+        });
+        this.skinNextDiv.addEventListener('click', () => {
+            this.previewPipeIndex++;
+            this.redrawShop();
+        });
+        this.useButton.addEventListener('click', () => {
+            if (this.previewPipeIndex !== 0 && this.purchases.findIndex(p => p.systemName === this.getPreviewPipe()) === -1) {
+                this.buy(this.previewPipeIndex);
+                return;
+            }
+            this.currentPipeIndex = this.previewPipeIndex;
+            window.localStorage.setItem('chosen-pipe', this.currentPipeIndex.toString());
+            this.redrawShop();
+        });
+        this.shopButton.addEventListener('click', () => {
+            if (this.shopShown) this.hideShop();
+            else this.showShop();
+        });
+    }
+
+    showLoading() {
+        this.spinnerDiv.style.display = 'unset';
+    }
+
+    hideLoading() {
+        this.spinnerDiv.style.display = 'none';
+    }
+
+    showMain(again: boolean, results?: { rewardsText: string }) {
+        if (again) this.playButton.innerText = 'PLAY AGAIN';
+        if (results !== undefined) {
+            this.rewardsDiv.style.display = 'inline-block';
+            this.rewardsDiv.innerText = results.rewardsText;
+        }
+        this.buttonsDiv.style.display = 'flex';
+    }
+
+    hideMain() {
+        this.rewardsDiv.style.display = 'none';
+        this.buttonsDiv.style.display = 'none';
+    }
+
+    getCurrentPipe() {
+        return PIPES_AVAILABLE[this.currentPipeIndex];
+    }
+
+    getPreviewPipe() {
+        return PIPES_AVAILABLE[this.previewPipeIndex];
+    }
+
+    redrawShop() {
+        this.skinImage.src = 'assets/' + this.getPreviewPipe() + '.png';
+        this.skinPrevDiv.style.display = this.previewPipeIndex > 0 ? 'unset' : 'none';
+        this.skinNextDiv.style.display = this.previewPipeIndex < PIPES_AVAILABLE.length - 1 ? 'unset' : 'none';
+        const bought = this.purchases.findIndex(p => p.systemName === this.getPreviewPipe()) >= 0;
+        this.useButton.innerText = this.previewPipeIndex === this.currentPipeIndex ? 'USED' : ((this.previewPipeIndex === 0 || bought) ? 'USE' : ('BUY FOR ' + PIPES_COSTS[this.previewPipeIndex]));
+    }
+
+    async reloadPurchases() {
+        this.reloadShopTimeout = undefined;
+
+        try {
+            const purchasesData = await (await fetch(ENDPOINT + '/purchases?auth=' + encodeURIComponent((window as any).Telegram.WebApp.initData))).json();
+            if (!this.shopShown) return;
+            if (!purchasesData.ok) throw new Error('Unsuccessful');
+
+            this.purchases = purchasesData.purchases;
+
+            this.redrawShop();
+        } catch (e) {}
+
+        this.reloadShopTimeout = setTimeout(() => this.reloadPurchases(), SHOP_RELOAD_INTERVAL);
+    }
+
+    async showShop() {
+        this.rewardsDiv.style.display = 'none';
+        this.hideMain();
+        this.showLoading();
+
+        try {
+            const purchasesData = await (await fetch(ENDPOINT + '/purchases?auth=' + encodeURIComponent((window as any).Telegram.WebApp.initData))).json();
+            if (!purchasesData.ok) throw new Error('Unsuccessful');
+
+            this.hideLoading();
+            this.showMain(false);
+
+            this.purchases = purchasesData.purchases;
+        } catch (e) {
+            this.hideLoading();
+            this.showMain(false, {
+                rewardsText: 'Could not load the shop',
+            });
+            return;
+        }
+
+        this.reloadShopTimeout = setTimeout(() => this.reloadPurchases(), SHOP_RELOAD_INTERVAL);
+
+        this.shopShown = true;
+        this.skinChooserDiv.style.display = 'flex';
+        this.useButton.style.display = 'unset';
+        this.previewPipeIndex = this.currentPipeIndex;
+        this.redrawShop();
+    }
+
+    hideShop() {
+        clearTimeout(this.reloadShopTimeout);
+        this.reloadShopTimeout = undefined;
+        this.shopShown = false;
+        this.skinChooserDiv.style.display = 'none';
+        this.useButton.style.display = 'none';
+        this.rewardsDiv.style.display = 'inline-block';
+    }
+
+    setScore(score: number) {
+        this.scoreDiv.innerText = score.toString();
+    }
+
+    onPlayClicked(fn: () => void) {
+        this.playButton.addEventListener('click', fn);
+    }
+
+    transitionToGame() {
+        this.connectDiv.style.display = 'none';
+        this.scoreDiv.style.display = 'inline-block';
+        this.buttonsDiv.style.display = 'flex';
+    }
+}
+
+const ui = new UI();
 
 const tc = new TonConnectUI({
     buttonRootId: 'connect',
@@ -25,15 +235,13 @@ const BG_HEIGHT = 512;
 const INITIAL_COLUMN_VELOCITY = -150;
 const INITIAL_COLUMN_INTERVAL = 3000;
 
-let firstLaunch = true;
-
 const achievements: { [k: string]: string } = {
     'first-time': 'Played 1 time',
     'five-times': 'Played 5 times',
 };
 
 async function submitPlayed(score: number) {
-    return await (await fetch('https://flappy.krigga.dev/played', {
+    return await (await fetch(ENDPOINT + '/played', {
         body: JSON.stringify({
             tg_data: (window as any).Telegram.WebApp.initData,
             wallet: tc.account?.address,
@@ -56,18 +264,15 @@ class MyScene extends Phaser.Scene {
     columnInterval = INITIAL_COLUMN_INTERVAL;
     lastColumn = 0;
     background!: Phaser.GameObjects.TileSprite;
-    scoreText!: HTMLDivElement;
+    firstLaunch: boolean = true;
 
     constructor() {
         super();
 
-        this.scoreText = document.getElementById('score') as HTMLDivElement;
+        ui.onPlayClicked(() => {
+            ui.hideShop();
+            ui.hideMain();
 
-        document.getElementById('play')!.addEventListener('click', () => {
-            this.scoreText.innerText = '0';
-            document.getElementById('rewards')!.style.display = 'none';
-            document.getElementById('play')!.style.display = 'none';
-            document.getElementById('play')!.innerText = 'PLAY AGAIN';
             this.scene.restart();
         });
     }
@@ -77,7 +282,8 @@ class MyScene extends Phaser.Scene {
     }
 
     preload() {
-        this.load.image('pipe', 'assets/pipe-green.png');
+        this.load.image('pipe-green', 'assets/pipe-green.png');
+        this.load.image('pipe-red', 'assets/pipe-red.png');
         this.load.image('bird-up', 'assets/bluebird-upflap.png');
         this.load.image('bird-down', 'assets/bluebird-downflap.png');
         this.load.image('bird-mid', 'assets/bluebird-midflap.png');
@@ -104,8 +310,8 @@ class MyScene extends Phaser.Scene {
         this.input.on('pointerdown', () => this.onInput());
         this.input.keyboard?.on('keydown', () => this.onInput());
 
-        if (firstLaunch) {
-            firstLaunch = false;
+        if (this.firstLaunch) {
+            this.firstLaunch = false;
             this.scene.pause();
         }
 
@@ -114,6 +320,7 @@ class MyScene extends Phaser.Scene {
         this.columnInterval = INITIAL_COLUMN_INTERVAL;
         this.tracked = [];
         this.score = 0;
+        ui.setScore(this.score);
         this.lastColumn = 0;
     }
 
@@ -128,24 +335,25 @@ class MyScene extends Phaser.Scene {
     async onOverlapped() {
         this.scene.pause();
 
-        document.getElementById('spinner-container')!.style.display = 'unset';
+        ui.showLoading();
 
         try {
             const playedInfo = await submitPlayed(this.score) as any;
+
             if (!playedInfo.ok) throw new Error('Unsuccessful');
 
-            const rewardsDiv = document.getElementById('rewards')!;
-            rewardsDiv.innerText = 'GAME OVER!\n' + (playedInfo.achievements.length > 0 ? ((playedInfo.achievements.length === 1 ? 'New achievement!' : 'New achievements!') + '\n' + playedInfo.achievements.map((a: string) => achievements[a] + '\n') + '\n') : '') + 'Tokens awarded: ' + playedInfo.reward;
-            rewardsDiv.style.display = 'inline-block';
+            ui.showMain(true, {
+                rewardsText: 'GAME OVER!\n' + (playedInfo.achievements.length > 0 ? ((playedInfo.achievements.length === 1 ? 'New achievement!' : 'New achievements!') + '\n' + playedInfo.achievements.map((a: string) => achievements[a] + '\n') + '\n') : '') + 'Tokens awarded: ' + playedInfo.reward,
+            });
         } catch (e) {
             console.error(e);
-            const rewardsDiv = document.getElementById('rewards')!;
-            rewardsDiv.innerText = 'Could not load your rewards information';
-            rewardsDiv.style.display = 'inline-block';
+
+            ui.showMain(true, {
+                rewardsText: 'Could not load your rewards information',
+            });
         }
 
-        document.getElementById('spinner-container')!.style.display = 'none';
-        document.getElementById('play')!.style.display = 'unset';
+        ui.hideLoading();
     }
 
     update(time: number, delta: number): void {
@@ -170,7 +378,7 @@ class MyScene extends Phaser.Scene {
             if (!t.scored && t.r1.x + PIPE_WIDTH / 2 < (this.character.body as Phaser.Physics.Arcade.Body).x - (this.character.body as Phaser.Physics.Arcade.Body).width / 2) {
                 t.scored = true;
                 this.score++;
-                this.scoreText.innerText = this.score.toString();
+                ui.setScore(this.score);
             }
             if (t.r1.x < -PIPE_WIDTH / 2) {
                 this.tracked.splice(i, 1);
@@ -185,10 +393,10 @@ class MyScene extends Phaser.Scene {
         const realWidth = this.getRealGameWidth();
         const gapStart = GAP_START + Math.random() * (GAP_END - GAP_START);
         const gapSize = GAP_MIN + Math.random() * (GAP_MAX - GAP_MIN);
-        const r1 = this.add.image(realWidth + PIPE_WIDTH / 2, gapStart - PIPE_HEIGHT / 2, 'pipe');
+        const r1 = this.add.image(realWidth + PIPE_WIDTH / 2, gapStart - PIPE_HEIGHT / 2, ui.getCurrentPipe());
         r1.scale = PIPE_SCALE;
         r1.flipY = true;
-        const r2 = this.add.image(realWidth + PIPE_WIDTH / 2, gapStart + gapSize + PIPE_HEIGHT / 2, 'pipe');
+        const r2 = this.add.image(realWidth + PIPE_WIDTH / 2, gapStart + gapSize + PIPE_HEIGHT / 2, ui.getCurrentPipe());
         r2.scale = PIPE_SCALE;
         this.tracked.push({
             r1, r2, scored: false,
@@ -204,9 +412,8 @@ let game: Phaser.Game | null = null;
 
 tc.onStatusChange((wallet) => {
     if (game === null && wallet !== null) {
-        document.getElementById('connect')!.style.display = 'none';
-        document.getElementById('play')!.style.display = 'unset';
-        document.getElementById('score')!.style.display = 'inline-block';
+        ui.transitionToGame();
+        ui.showMain(false);
         game = new Phaser.Game({
             type: Phaser.AUTO,
             height: GAME_HEIGHT,

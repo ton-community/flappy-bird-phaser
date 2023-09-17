@@ -1,4 +1,5 @@
 const path = require('path');
+const webpack = require('webpack');
 
 module.exports = {
   entry: './src/index.ts',
@@ -24,5 +25,15 @@ module.exports = {
     port: 4000,
     allowedHosts: 'all',
   },
+  resolve: {
+    fallback: {
+      buffer: require.resolve('buffer/'),
+    },
+  },
+  plugins: [
+    new webpack.ProvidePlugin({
+      Buffer: ['buffer', 'Buffer'],
+    }),
+  ],
   mode: 'production',
 };

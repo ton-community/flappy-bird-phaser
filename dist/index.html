@@ -24,11 +24,7 @@
             pointer-events: none;
         }
 
-        #overlay-bottom {
-            pointer-events: auto;
-        }
-
-        #connect {
+        #connect, #use, #shop, #play, #skin-prev, #skin-next {
             pointer-events: auto;
         }
 
@@ -49,16 +45,37 @@
             text-align: center;
         }
 
-        #play {
+        .btn {
             background-color: #0098EA;
-            margin-bottom: 50px;
             height: 60px;
             font-size: 40px;
             border-radius: 10px;
             border: none;
-            display: none;
             padding: 10px;
             color: white;
+        }
+
+        #buttons {
+            margin-bottom: 50px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        #skin-chooser {
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+        }
+
+        .skin-chooser-btn-cont {
+            width: 30px;
+            margin: 0 10px;
+        }
+
+        .skin-chooser-btn {
+            width: 30px;
+            height: 30px;
         }
 
         #rewards {
@@ -116,9 +133,18 @@
             <div id="rewards"></div>
             <div id="spinner-container"><div class="lds-ring"><div></div><div></div><div></div><div></div></div></div>
             <div id="connect"></div>
+            <div id="skin-chooser" style="display: none">
+                <div class="skin-chooser-btn-cont"><img id="skin-prev" class="skin-chooser-btn" src="assets/prev.svg"></div>
+                <div id="skin-current"><img id="skin-image"></div>
+                <div class="skin-chooser-btn-cont"><img id="skin-next" class="skin-chooser-btn" src="assets/next.svg"></div>
+            </div>
         </div>
         <div id="overlay-bottom">
-            <button id="play">PLAY</button>
+            <div id="buttons" style="display: none;">
+                <button class="btn" id="use" style="display: none">USE</button>
+                <button class="btn" id="shop">SHOP</button>
+                <button class="btn" id="play">PLAY</button>
+            </div>
         </div>
     </div>
     <script src="bundle.js"></script>
