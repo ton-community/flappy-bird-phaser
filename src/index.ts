@@ -27,6 +27,7 @@ class UI {
     shopButton: HTMLButtonElement = document.getElementById('shop') as HTMLButtonElement;
     playButton: HTMLButtonElement = document.getElementById('play') as HTMLButtonElement;
     buttonsDiv: HTMLDivElement = document.getElementById('buttons') as HTMLDivElement;
+    balanceDiv: HTMLDivElement = document.getElementById('balance') as HTMLDivElement;
 
     currentPipeIndex = Number(window.localStorage.getItem('chosen-pipe') ?? '0');
     previewPipeIndex = this.currentPipeIndex;
@@ -39,6 +40,18 @@ class UI {
 
     client: TonClient4 | undefined = undefined;
     jettonWallet: Address | undefined = undefined;
+
+    async getBalance() {
+        try {
+            const client = await this.getClient();
+            const jw = await this.getJettonWallet();
+            const last = await client.getLastBlock();
+            const r = await client.runMethod(last.last.seqno, jw, 'get_wallet_data');
+            return r.reader.readBigNumber();
+        } catch (e) {
+            return BigInt(0);
+        }
+    }
 
     async getJettonWallet() {
         if (this.jettonWallet === undefined) {
@@ -152,6 +165,13 @@ class UI {
             this.redrawShop();
         } catch (e) {}
 
+        try {
+            const balance = await this.getBalance();
+            if (!this.shopShown) return;
+
+            this.balanceDiv.innerText = balance.toString();
+        } catch (e) {}
+
         this.reloadShopTimeout = setTimeout(() => this.reloadPurchases(), SHOP_RELOAD_INTERVAL);
     }
 
@@ -163,6 +183,9 @@ class UI {
         try {
             const purchasesData = await (await fetch(ENDPOINT + '/purchases?auth=' + encodeURIComponent((window as any).Telegram.WebApp.initData))).json();
             if (!purchasesData.ok) throw new Error('Unsuccessful');
+            const balance = await this.getBalance();
+
+            this.balanceDiv.innerText = balance.toString();
 
             this.hideLoading();
             this.showMain(false);

@@ -24,6 +24,13 @@
             pointer-events: none;
         }
 
+        #overlay-mid {
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
         #connect, #use, #shop, #play, #skin-prev, #skin-next {
             pointer-events: auto;
         }
@@ -65,7 +72,32 @@
         #skin-chooser {
             display: flex;
             flex-direction: row;
+            width: 100%;
+        }
+
+        #skin-chooser > * {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+        }
+
+        #skin-chooser:first-child {
+            margin-right: auto;
+        }
+
+        #skin-chooser:last-child {
+            margin-left: auto;
+        }
+
+        #skin-chooser-mid {
+            display: flex;
+            flex-direction: row;
             align-items: center;
+        }
+
+        #skin-chooser-left {
+            color: white;
+            font-family: Arial, Helvetica, sans-serif;
         }
 
         .skin-chooser-btn-cont {
@@ -134,9 +166,13 @@
             <div id="spinner-container"><div class="lds-ring"><div></div><div></div><div></div><div></div></div></div>
             <div id="connect"></div>
             <div id="skin-chooser" style="display: none">
-                <div class="skin-chooser-btn-cont"><img id="skin-prev" class="skin-chooser-btn" src="assets/prev.svg"></div>
-                <div id="skin-current"><img id="skin-image"></div>
-                <div class="skin-chooser-btn-cont"><img id="skin-next" class="skin-chooser-btn" src="assets/next.svg"></div>
+                <div id="skin-chooser-left">Balance: <span id="balance">0</span></div>
+                <div id="skin-chooser-mid">
+                    <div class="skin-chooser-btn-cont"><img id="skin-prev" class="skin-chooser-btn" src="assets/prev.svg"></div>
+                    <div id="skin-current"><img id="skin-image"></div>
+                    <div class="skin-chooser-btn-cont"><img id="skin-next" class="skin-chooser-btn" src="assets/next.svg"></div>
+                </div>
+                <div id="skin-chooser-right"></div>
             </div>
         </div>
         <div id="overlay-bottom">
