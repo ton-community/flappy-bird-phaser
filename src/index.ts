@@ -12,6 +12,7 @@ const TOKEN_MASTER = 'EQBcRUiCkgdfnbnKKYhnPXkNi9BXkq_5uLGRuvnwwaZzelit';
 const NETWORK = 'testnet';
 
 const SHOP_RELOAD_INTERVAL = 10000;
+const BALANCE_RELOAD_INTERVAL = 10000;
 
 class UI {
     scoreDiv: HTMLDivElement = document.getElementById('score') as HTMLDivElement;
@@ -28,6 +29,13 @@ class UI {
     playButton: HTMLButtonElement = document.getElementById('play') as HTMLButtonElement;
     buttonsDiv: HTMLDivElement = document.getElementById('buttons') as HTMLDivElement;
     balanceDiv: HTMLDivElement = document.getElementById('balance') as HTMLDivElement;
+    playTextDiv: HTMLDivElement = document.getElementById('play-text') as HTMLDivElement;
+    useTextDiv: HTMLDivElement = document.getElementById('use-text') as HTMLDivElement;
+    balanceContainerDiv: HTMLDivElement = document.getElementById('balance-container') as HTMLDivElement;
+    afterGameDiv: HTMLDivElement = document.getElementById('after-game') as HTMLDivElement;
+    errorDiv: HTMLDivElement = document.getElementById('error') as HTMLDivElement;
+    tokensAwardedDiv: HTMLDivElement = document.getElementById('tokens-awarded') as HTMLDivElement;
+    newAchievementsDiv: HTMLDivElement = document.getElementById('new-achievements') as HTMLDivElement;
 
     currentPipeIndex = Number(window.localStorage.getItem('chosen-pipe') ?? '0');
     previewPipeIndex = this.currentPipeIndex;
@@ -40,6 +48,13 @@ class UI {
 
     client: TonClient4 | undefined = undefined;
     jettonWallet: Address | undefined = undefined;
+
+    async redrawBalance() {
+        const bal = await this.getBalance();
+        this.balanceDiv.innerText = bal.toString();
+        this.balanceContainerDiv.style.display = 'block';
+        setTimeout(() => this.redrawBalance(), BALANCE_RELOAD_INTERVAL);
+    }
 
     async getBalance() {
         try {
@@ -56,10 +71,13 @@ class UI {
     async getJettonWallet() {
         if (this.jettonWallet === undefined) {
             const client = await this.getClient();
+            if (tc.account === null) {
+                throw new Error('No account');
+            }
             const lastBlock = await client.getLastBlock();
             const r = await client.runMethod(lastBlock.last.seqno, Address.parse(TOKEN_MASTER), 'get_wallet_address', [{
                 type: 'slice',
-                cell: beginCell().storeAddress(Address.parse(tc.account!.address)).endCell(),
+                cell: beginCell().storeAddress(Address.parse(tc.account.address)).endCell(),
             }]);
             const addrItem = r.result[0];
             if (addrItem.type !== 'slice') throw new Error('Bad type');
@@ -112,6 +130,9 @@ class UI {
             if (this.shopShown) this.hideShop();
             else this.showShop();
         });
+        this.connectDiv.addEventListener('click', () => {
+            tc.connectWallet();
+        });
     }
 
     showLoading() {
@@ -122,17 +143,39 @@ class UI {
         this.spinnerDiv.style.display = 'none';
     }
 
-    showMain(again: boolean, results?: { rewardsText: string }) {
-        if (again) this.playButton.innerText = 'PLAY AGAIN';
+    showMain(again: boolean, results?: { reward: 0, achievements: string[] } | { error: string }) {
+        if (again) {
+            this.playButton.classList.add('button-wide');
+            this.playTextDiv.innerText = 'Play again';
+        }
         if (results !== undefined) {
-            this.rewardsDiv.style.display = 'inline-block';
-            this.rewardsDiv.innerText = results.rewardsText;
+            this.afterGameDiv.style.display = 'block';
+            if ('error' in results) {
+                this.rewardsDiv.style.display = 'none';
+                this.errorDiv.innerText = results.error;
+                this.errorDiv.style.display = 'block';
+            } else {
+                this.errorDiv.style.display = 'none';
+                this.rewardsDiv.style.display = 'flex';
+                this.tokensAwardedDiv.innerText = results.reward.toString();
+                if (results.achievements.length > 0) {
+                    const achNodes = [results.achievements.length > 1 ? 'New achievements!' : 'New achievement!', ...results.achievements].map(a => {
+                        const div = document.createElement('div');
+                        div.className = 'flappy-text award-text';
+                        div.innerText = a;
+                        return div;
+                    });
+                    this.newAchievementsDiv.replaceChildren(...achNodes);
+                } else {
+                    this.newAchievementsDiv.replaceChildren();
+                }
+            }
         }
         this.buttonsDiv.style.display = 'flex';
     }
 
     hideMain() {
-        this.rewardsDiv.style.display = 'none';
+        this.afterGameDiv.style.display = 'none';
         this.buttonsDiv.style.display = 'none';
     }
 
@@ -149,7 +192,16 @@ class UI {
         this.skinPrevDiv.style.display = this.previewPipeIndex > 0 ? 'unset' : 'none';
         this.skinNextDiv.style.display = this.previewPipeIndex < PIPES_AVAILABLE.length - 1 ? 'unset' : 'none';
         const bought = this.purchases.findIndex(p => p.systemName === this.getPreviewPipe()) >= 0;
-        this.useButton.innerText = this.previewPipeIndex === this.currentPipeIndex ? 'USED' : ((this.previewPipeIndex === 0 || bought) ? 'USE' : ('BUY FOR ' + PIPES_COSTS[this.previewPipeIndex]));
+        if (this.previewPipeIndex === this.currentPipeIndex) {
+            this.useTextDiv.innerText = 'Used';
+            this.useButton.className = 'button-narrow';
+        } else if (this.previewPipeIndex === 0 || bought) {
+            this.useTextDiv.innerText = 'Use';
+            this.useButton.className = 'button-narrow';
+        } else {
+            this.useTextDiv.innerText = 'Buy for ' + PIPES_COSTS[this.previewPipeIndex];
+            this.useButton.className = 'button-narrow button-wide';
+        }
     }
 
     async reloadPurchases() {
@@ -165,27 +217,17 @@ class UI {
             this.redrawShop();
         } catch (e) {}
 
-        try {
-            const balance = await this.getBalance();
-            if (!this.shopShown) return;
-
-            this.balanceDiv.innerText = balance.toString();
-        } catch (e) {}
-
         this.reloadShopTimeout = setTimeout(() => this.reloadPurchases(), SHOP_RELOAD_INTERVAL);
     }
 
     async showShop() {
-        this.rewardsDiv.style.display = 'none';
+        this.afterGameDiv.style.display = 'none';
         this.hideMain();
         this.showLoading();
 
         try {
             const purchasesData = await (await fetch(ENDPOINT + '/purchases?auth=' + encodeURIComponent((window as any).Telegram.WebApp.initData))).json();
             if (!purchasesData.ok) throw new Error('Unsuccessful');
-            const balance = await this.getBalance();
-
-            this.balanceDiv.innerText = balance.toString();
 
             this.hideLoading();
             this.showMain(false);
@@ -194,7 +236,7 @@ class UI {
         } catch (e) {
             this.hideLoading();
             this.showMain(false, {
-                rewardsText: 'Could not load the shop',
+                error: 'Could not load the shop',
             });
             return;
         }
@@ -203,7 +245,7 @@ class UI {
 
         this.shopShown = true;
         this.skinChooserDiv.style.display = 'flex';
-        this.useButton.style.display = 'unset';
+        this.useButton.style.display = 'flex';
         this.previewPipeIndex = this.currentPipeIndex;
         this.redrawShop();
     }
@@ -214,7 +256,7 @@ class UI {
         this.shopShown = false;
         this.skinChooserDiv.style.display = 'none';
         this.useButton.style.display = 'none';
-        this.rewardsDiv.style.display = 'inline-block';
+        this.afterGameDiv.style.display = 'block';
     }
 
     setScore(score: number) {
@@ -235,7 +277,6 @@ class UI {
 const ui = new UI();
 
 const tc = new TonConnectUI({
-    buttonRootId: 'connect',
     manifestUrl: 'https://raw.githubusercontent.com/ton-defi-org/tonconnect-manifest-temp/main/tonconnect-manifest.json',
 });
 
@@ -366,13 +407,14 @@ class MyScene extends Phaser.Scene {
             if (!playedInfo.ok) throw new Error('Unsuccessful');
 
             ui.showMain(true, {
-                rewardsText: 'GAME OVER!\n' + (playedInfo.achievements.length > 0 ? ((playedInfo.achievements.length === 1 ? 'New achievement!' : 'New achievements!') + '\n' + playedInfo.achievements.map((a: string) => achievements[a] + '\n') + '\n') : '') + 'Tokens awarded: ' + playedInfo.reward,
+                reward: playedInfo.reward,
+                achievements: playedInfo.achievements.map((a: string) => achievements[a]),
             });
         } catch (e) {
             console.error(e);
 
             ui.showMain(true, {
-                rewardsText: 'Could not load your rewards information',
+                error: 'Could not load your rewards information',
             });
         }
 
@@ -437,6 +479,7 @@ tc.onStatusChange((wallet) => {
     if (game === null && wallet !== null) {
         ui.transitionToGame();
         ui.showMain(false);
+        ui.redrawBalance();
         game = new Phaser.Game({
             type: Phaser.AUTO,
             height: GAME_HEIGHT,
