@@ -4,4 +4,4 @@ This is an example game made with [Phaser](https://phaser.io/) to demonstrate th
 
 ## Building
 
-Build static with `yarn webpack` or `npm run webpack`. Development server is configured so you can add `serve` to these commands to use it.
+Build static with `npm run build`. Run dev server with `npm start`.
