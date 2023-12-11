@@ -3,10 +3,12 @@ import { TonConnectUI } from '@tonconnect/ui';
 import { Address, beginCell } from '@ton/core';
 import { getHttpV4Endpoint } from '@orbs-network/ton-access';
 import { TonClient4 } from '@ton/ton';
+import { ConnectTelegramWalletButton } from './phaser-ton';
 
 const PIPES_AVAILABLE = ['pipe-green', 'pipe-red'];
 const PIPES_COSTS = [0, 1];
-const ENDPOINT = 'https://flappy.krigga.dev';
+const ENDPOINT = 'http://localhost:3000';
+// const ENDPOINT = 'https://flappy.krigga.dev';
 const TOKEN_RECIPIENT = 'EQBb7bFnXnKAN1DNO3GPKLXPNiEyi4U6-805Y-aBkgJtK_lJ';
 const TOKEN_MASTER = 'EQBcRUiCkgdfnbnKKYhnPXkNi9BXkq_5uLGRuvnwwaZzelit';
 const NETWORK = 'testnet';
@@ -318,6 +320,32 @@ async function submitPlayed(score: number) {
     })).json();
 }
 
+class UiScene extends Phaser.Scene {
+    button!: ConnectTelegramWalletButton;
+
+    constructor() {
+        super({ key: 'UiScene', active: true });
+    }
+
+    create() {
+        this.button = new ConnectTelegramWalletButton(
+            this,
+            16,
+            40,
+            {
+                style: 'light',
+                onWalletChange: (wallet) => {
+                    console.info('Wallet changed', wallet);
+                },
+                onError: (error) => {
+                    console.error('Caught Error', error);
+                },
+                appManifestUrl: 'https://raw.githubusercontent.com/ton-defi-org/tonconnect-manifest-temp/main/tonconnect-manifest.json',
+            }
+        );
+    }
+}
+
 class MyScene extends Phaser.Scene {
     character!: Phaser.GameObjects.Image;
     columnGroup!: Phaser.Physics.Arcade.Group;
@@ -484,7 +512,7 @@ tc.onStatusChange((wallet) => {
             type: Phaser.AUTO,
             height: GAME_HEIGHT,
             width: GAME_WIDTH,
-            scene: new MyScene(),
+            scene: [new MyScene(), new UiScene()],
             physics: {
                 default: 'arcade',
             },
@@ -499,5 +527,9 @@ tc.onStatusChange((wallet) => {
                 autoCenter: Phaser.Scale.CENTER_VERTICALLY,
             }
         });
+
+        // You can install Devtools for PixiJS - https://github.com/bfanger/pixi-inspector#installation
+        // @ts-ignore
+        globalThis.__PHASER_GAME__ = game;
     }
 });

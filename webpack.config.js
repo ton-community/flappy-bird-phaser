@@ -14,6 +14,9 @@ module.exports = {
   },
   resolve: {
     extensions: ['.tsx', '.ts', '.js'],
+    fallback: {
+      buffer: require.resolve('buffer/'),
+    },
   },
   output: {
     filename: 'bundle.js',
@@ -24,11 +27,6 @@ module.exports = {
     compress: true,
     port: 4000,
     allowedHosts: 'all',
-  },
-  resolve: {
-    fallback: {
-      buffer: require.resolve('buffer/'),
-    },
   },
   plugins: [
     new webpack.ProvidePlugin({
