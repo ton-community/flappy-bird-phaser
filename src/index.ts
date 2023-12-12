@@ -1,12 +1,12 @@
 import * as Phaser from 'phaser';
 import { TonConnectUI } from '@tonconnect/ui';
-import { Address, beginCell } from '@ton/core';
+import { Address, beginCell, toNano } from '@ton/core';
 import { getHttpV4Endpoint } from '@orbs-network/ton-access';
 import { TonClient4 } from '@ton/ton';
 import { ConnectTelegramWalletButton } from './phaser-ton';
 
 const PIPES_AVAILABLE = ['pipe-green', 'pipe-red'];
-const PIPES_COSTS = [0, 1];
+const PIPES_COSTS = [0, 0.05];
 const ENDPOINT = 'http://localhost:3000';
 // const ENDPOINT = 'https://flappy.krigga.dev';
 const TOKEN_RECIPIENT = 'EQBb7bFnXnKAN1DNO3GPKLXPNiEyi4U6-805Y-aBkgJtK_lJ';
@@ -98,13 +98,14 @@ class UI {
     }
 
     async buy(itemId: number) {
+        const price = PIPES_COSTS[this.previewPipeIndex];
         await tc.sendTransaction({
             validUntil: Math.floor(Date.now() / 1000) + 3600,
             messages: [
                 {
                     address: (await this.getJettonWallet()).toString(),
-                    amount: '50000000',
-                    payload: beginCell().storeUint(0x0f8a7ea5, 32).storeUint(0, 64).storeCoins(PIPES_COSTS[this.previewPipeIndex]).storeAddress(Address.parse(TOKEN_RECIPIENT)).storeAddress(Address.parse(tc.account!.address)).storeMaybeRef(undefined).storeCoins(1).storeMaybeRef(beginCell().storeUint(0, 32).storeStringTail((window as any).Telegram.WebApp.initDataUnsafe.user.id + ':' + itemId)).endCell().toBoc().toString('base64'),
+                    amount: toNano(price).toString(),
+                    payload: beginCell().storeUint(0x0f8a7ea5, 32).storeUint(0, 64).storeCoins(price).storeAddress(Address.parse(TOKEN_RECIPIENT)).storeAddress(Address.parse(tc.account!.address)).storeMaybeRef(undefined).storeCoins(1).storeMaybeRef(beginCell().storeUint(0, 32).storeStringTail((window as any).Telegram.WebApp.initDataUnsafe.user.id + ':' + itemId)).endCell().toBoc().toString('base64'),
                 },
             ],
         })
