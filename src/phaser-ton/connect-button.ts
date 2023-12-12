@@ -4,6 +4,7 @@ import { DropdownMenu, DropdownMenuItem } from "./dropdown";
 import { buttonDesign, locales } from "./consts"
 import { hexToNumber, rawAddressToFriendly } from "./utils";
 import { getConnector } from "./connect";
+import { redirectToTelegram } from "./tma-web-api";
 
 export let connectedWallet: Wallet | null = null;
 
@@ -33,7 +34,10 @@ export class ConnectTelegramWalletButton extends Phaser.GameObjects.Container {
     ) {
         super(scene, x, y);
         this.params = params;
-        this.connectionSource = {bridgeUrl: 'https://bridge.tonapi.io/bridge', universalLink: 'https://t.me/wallet?attach=wallet'}
+        this.connectionSource = {
+            bridgeUrl: 'https://bridge.tonapi.io/bridge',
+            universalLink: 'https://t.me/wallet?attach=wallet'
+        }
         this.connector = getConnector(
             params.appManifestUrl ? { manifestUrl: params.appManifestUrl } : undefined
         );
@@ -128,7 +132,11 @@ export class ConnectTelegramWalletButton extends Phaser.GameObjects.Container {
             this.disable();
             const connectUrl = this.connector.connect(this.connectionSource);
             if (connectUrl) {
-                window.open(connectUrl, '_blank', 'noreferrer noopener');
+                redirectToTelegram(connectUrl, {
+                    returnStrategy: 'back',
+                    twaReturnUrl: 'https://t.me/flappybirddevbot/flappybirddev',
+                    forceRedirect: false
+                });
             }
         } catch (error) {
             this.params.onError(error);
