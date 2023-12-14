@@ -1,8 +1,8 @@
 import TonConnect, { Wallet, WalletConnectionSource } from "@tonconnect/sdk";
 import { Locale, Locales, Styles } from "./protocol";
 import { DropdownMenu, DropdownMenuItem } from "./dropdown";
-import { buttonDesign, locales } from "./consts"
-import { hexToNumber, rawAddressToFriendly } from "./utils";
+import { buttonDesign, locales, DARK_COPY, DARK_DIAMOND, DARK_DISCONNECT, LIGHT_COPY, LIGHT_DIAMOND, LIGHT_DISCONNECT } from "./consts"
+import { hexToNumber, rawAddressToFriendly, smoothScale } from "./utils";
 import { getConnector } from "./connect";
 import { redirectToTelegram } from "./tma-web-api";
 
@@ -17,7 +17,12 @@ export interface ConnectTelegramWalletParams {
 }
 
 export class ConnectTelegramWalletButton extends Phaser.GameObjects.Container {
-    buttonContainer: Phaser.GameObjects.Rectangle
+    buttonContainer: Phaser.GameObjects.Container;
+    buttonBackground: Phaser.GameObjects.Graphics;
+    buttonText: Phaser.GameObjects.Text;
+    buttonIcon: Phaser.GameObjects.Image;
+    buttonWidth: number;
+    buttonHeight: number;
     wallet: Wallet | null = null;
     params: ConnectTelegramWalletParams;
     connectionSource: WalletConnectionSource;
@@ -34,6 +39,7 @@ export class ConnectTelegramWalletButton extends Phaser.GameObjects.Container {
     ) {
         super(scene, x, y);
         this.params = params;
+        // this.connectionSource = {jsBridgeKey: 'tonkeeper'};
         this.connectionSource = {
             bridgeUrl: 'https://bridge.tonapi.io/bridge',
             universalLink: 'https://t.me/wallet?attach=wallet'
@@ -44,50 +50,92 @@ export class ConnectTelegramWalletButton extends Phaser.GameObjects.Container {
 
         const locale = locales[params.language ?? 'en'];
         this.locale = locale;
-        const textColor = params.style === 'dark'
-            ? buttonDesign.whiteColor : buttonDesign.blackColor;
+        const styleSchema = params.style === 'dark' ? buttonDesign.dark : buttonDesign.light;
+        /* const textColor = params.style === 'dark'
+            ? buttonDesign.darkFontColor : buttonDesign.lightFontColor; */
         const backgroundColor = params.style === 'dark'
-            ? hexToNumber(buttonDesign.blackColor) : hexToNumber(buttonDesign.whiteColor);
+            ? hexToNumber(styleSchema.backgroundColor) : hexToNumber(styleSchema.backgroundColor);
+
+        const btnCtr = new Phaser.GameObjects.Container(scene, 0, 0);
 
         const textObject = scene.add.text(
-            buttonDesign.horizontalPadding,
+            // 0,
+            // 0,
+            buttonDesign.horizontalPadding + buttonDesign.icon.width,
             buttonDesign.verticalPadding,
             locale.connectWallet,
             {
-                color: textColor,
+                color: styleSchema.fontColor,
                 fontFamily: buttonDesign.fontFamily,
                 fontSize: buttonDesign.fontSize,
             }
         );
+        this.buttonText = textObject;
 
         const textWidth = textObject.width;
         const textHeight = textObject.height;
-        const buttonWidth = textWidth + (buttonDesign.horizontalPadding * 2);
+        const buttonWidth = textWidth + (buttonDesign.horizontalPadding * 2) + buttonDesign.icon.width + buttonDesign.icon.horizontalPadding;
         const buttonHeight = textHeight + (buttonDesign.verticalPadding * 2);
 
-        const button = scene.add.rectangle(
-            0,
-            0,
-            buttonWidth,
-            buttonHeight,
-            backgroundColor
+        this.buttonWidth = buttonWidth;
+        this.buttonHeight = buttonHeight;
+
+        const icon = scene.add.image(
+            buttonDesign.horizontalPadding - buttonDesign.icon.horizontalPadding + buttonDesign.icon.width * 0.5,
+            buttonHeight * 0.5,
+            params.style === 'dark' ? DARK_DIAMOND : LIGHT_DIAMOND
         );
-        button.setOrigin(0, 0);
-        this.buttonContainer = button;
+        this.buttonIcon = icon;
+
+        const button = scene.add.graphics({
+            x: 0,
+            y: 0,
+            fillStyle: { color: this.wallet == null ? hexToNumber(styleSchema.backgroundColor) : backgroundColor },
+            lineStyle: { width: buttonDesign.borderWidth, color: hexToNumber(styleSchema.borderColor) }
+            // lineStyle: { width: 5, color: 0xff0000 }
+        });
+        button.fillRoundedRect(0, 0, buttonWidth, buttonHeight, buttonDesign.borderRadius);
+        button.strokeRoundedRect(0, 0, buttonWidth, buttonHeight, buttonDesign.borderRadius);
+        this.buttonBackground = button;
+        // button.setInteractive(new Phaser.Geom.Rectangle(0, 0, buttonWidth, buttonHeight), Phaser.Geom.Rectangle.Contains);
+
+        btnCtr.on('pointerover', () => {
+            scene.game.canvas.style.cursor = 'pointer';
+            if (this.wallet !== null) {
+                this.repaintButtonBackground(styleSchema.backgroundColorHover, styleSchema.borderColor);
+            }
+            smoothScale(scene.tweens, btnCtr, 1.02, 125);
+        });
+        btnCtr.on('pointerout', () => {
+            scene.game.canvas.style.cursor = 'default';
+            if (this.wallet !== null) {
+                this.repaintButtonBackground(styleSchema.backgroundColor, styleSchema.borderColor);
+            }
+            smoothScale(scene.tweens, btnCtr, 1, 125);
+        });
+        btnCtr.on('pointerdown', () => {
+            smoothScale(scene.tweens, btnCtr, 0.98, 125);
+        });
+        btnCtr.on('pointerup', () => {
+            smoothScale(scene.tweens, btnCtr, 1.02, 125);
+        });
+
+        this.buttonContainer = btnCtr;
 
         this.dropdownMenu = new DropdownMenu(
             scene,
             0,
             buttonHeight + buttonDesign.dropDown.topMargin,
             {
-                backgroundColor,
-                textColor,
+                style: params.style,
                 items: [
                     {
+                        icon: params.style === 'dark' ? DARK_COPY : LIGHT_COPY,
                         text: locale.copyAddress,
                         onClick: this.copyAddress,
                     },
                     {
+                        icon: params.style === 'dark' ? DARK_DISCONNECT : LIGHT_DISCONNECT,
                         text: locale.disconnectWallet,
                         onClick: () => {
                             this.toggleDropdownMenu();
@@ -99,36 +147,58 @@ export class ConnectTelegramWalletButton extends Phaser.GameObjects.Container {
         );
         this.dropdownMenu.setVisible(false);
 
-        this.add([button, textObject, this.dropdownMenu]);
+
+        textObject.setText('...');
+        btnCtr.add([button, icon, textObject]);
+        // btnCtr.setInteractive(new Phaser.Geom.Rectangle(0, 0, buttonWidth, buttonHeight), Phaser.Geom.Rectangle.Contains);
+
+        this.add([btnCtr, this.dropdownMenu]);
         scene.add.existing(this);
 
+        console.log('constructor', this.wallet);
+
         this.unsubscribeFromConnector = this.connector.onStatusChange((wallet) => {
-            console.log('Wallet status changed!!!!', wallet);
+            console.log('changed', wallet);
             connectedWallet = wallet;
             this.wallet = wallet;
-            this.enable();
-            button.removeAllListeners('pointerdown');
 
             if (wallet) {
-                textObject.setText(rawAddressToFriendly(wallet.account.address, true));
-                button.on('pointerdown', this.toggleDropdownMenu);
+                btnCtr.off('pointerdown', this.connectWallet);
+                textObject
+                    .setText(rawAddressToFriendly(wallet.account.address, true))
+                    // .setColor(styleSchema.fontColor);
+                btnCtr
+                    // .setFillStyle(backgroundColor)
+                    .on('pointerdown', this.toggleDropdownMenu);
+
+                // todo handle style change outside
+                this.setSchema(styleSchema);
             } else {
-                textObject.setText('Connect Wallet');
-                button.on('pointerdown', this.connectWallet);
+                btnCtr.off('pointerdown', this.toggleDropdownMenu);
+                textObject
+                    .setText(locale.connectWallet);
+                btnCtr
+                    .on('pointerdown', this.connectWallet);
+
+                this.setSchema(buttonDesign.default);
             }
         });
 
         this.connector.restoreConnection().then(() => {
             if (this.wallet === null) {
-                this.enable();
-                button.removeAllListeners('pointerdown');
-                button.on('pointerdown', this.connectWallet);
+                textObject
+                    .setText(locale.connectWallet);
+                btnCtr.on('pointerdown', this.connectWallet);
+                this.setSchema(buttonDesign.default);
             }
+
+            this.enable();
         });
     }
 
     private connectWallet = () => {
         try {
+            // todo disable button while waiting for the connection, now not working
             this.disable();
             const connectUrl = this.connector.connect(this.connectionSource);
             if (connectUrl) {
@@ -168,7 +238,7 @@ export class ConnectTelegramWalletButton extends Phaser.GameObjects.Container {
             setTimeout(() => {
                 try {
                     item.text.setText(oldText);
-                    this.toggleDropdownMenu();
+                    // this.toggleDropdownMenu();
                 } catch(error) {
                     // ignore in case the object was destroyed by leaving the scene
                 }
@@ -183,11 +253,42 @@ export class ConnectTelegramWalletButton extends Phaser.GameObjects.Container {
     }
 
     private enable() {
-        this.buttonContainer.setInteractive({ useHandCursor: true});
+        this.buttonContainer.setInteractive(new Phaser.Geom.Rectangle(0, 0, this.buttonWidth, this.buttonHeight), Phaser.Geom.Rectangle.Contains);
     }
 
     private toggleDropdownMenu = () => {
         this.dropdownMenu.setVisible(!this.dropdownMenu.visible);
+    }
+
+    // todo setStyle for changing it from outside
+    /* public setStyle(style: Styles) {
+        if (this.params.style === style) {
+            return;
+        }
+
+        this.params.style = style;
+        const schema = style === 'dark' ? buttonDesign.dark : buttonDesign.light;
+        this.setSchema(schema);
+        this.dropdownMenu.setSchema(schema);
+    } */
+
+    private setSchema(schema: typeof buttonDesign.dark) {
+        /* this.buttonBackground.clear();
+        this.buttonBackground.fillStyle(hexToNumber(schema.backgroundColor));
+        this.buttonBackground.lineStyle(1, hexToNumber(schema.borderColor));
+        this.buttonBackground.fillRoundedRect(0, 0, this.buttonWidth, this.buttonHeight, buttonDesign.borderRadius); */
+
+        this.repaintButtonBackground(schema.backgroundColor, schema.borderColor);
+        this.buttonIcon.setTexture(schema.icons.diamond);
+        this.buttonText.setColor(schema.fontColor);
+    }
+
+    private repaintButtonBackground(backgroundColor: string, borderColor: string) {
+        this.buttonBackground.clear();
+        this.buttonBackground.fillStyle(hexToNumber(backgroundColor));
+        this.buttonBackground.lineStyle(buttonDesign.borderWidth, hexToNumber(borderColor));
+        this.buttonBackground.fillRoundedRect(0, 0, this.buttonWidth, this.buttonHeight, buttonDesign.borderRadius);
+        this.buttonBackground.strokeRoundedRect(0, 0, this.buttonWidth, this.buttonHeight, buttonDesign.borderRadius);
     }
 
     public destroy() {

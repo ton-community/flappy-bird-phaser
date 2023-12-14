@@ -1,14 +1,18 @@
 import { buttonDesign } from "./consts";
+import { Styles } from "./protocol";
+import { hexToNumber, smoothScale } from "./utils";
 
 export interface DropdownMenuItemParams {
+    style: Styles;
     text: string;
+    icon: string;
     onClick?: (item: DropdownMenuItem) => void;
-    backgroundColor: number;
-    textColor: string;
 }
 export class DropdownMenuItem extends Phaser.GameObjects.Container {
-    public readonly button: Phaser.GameObjects.Rectangle;
+    public readonly button: Phaser.GameObjects.Graphics;
+    public readonly buttonHeight: number;
     public readonly text: Phaser.GameObjects.Text;
+    public readonly icon: Phaser.GameObjects.Image;
 
     constructor(
         scene: Phaser.Scene,
@@ -18,12 +22,14 @@ export class DropdownMenuItem extends Phaser.GameObjects.Container {
     ) {
         super(scene, x, y);
 
+        const styleSchema = params.style === 'dark' ? buttonDesign.dark : buttonDesign.light;
+
         const text = scene.add.text(
-            buttonDesign.dropDownItem.horizontalPadding,
+            buttonDesign.dropDownItem.horizontalPadding + buttonDesign.icon.width + buttonDesign.dropDownItem.horizontalPadding,
             buttonDesign.dropDownItem.verticalPadding,
             params.text,
             {
-                color: params.textColor,
+                color: styleSchema.fontColor,
                 fontFamily: buttonDesign.fontFamily,
                 fontSize: buttonDesign.fontSize,
             }
@@ -34,15 +40,49 @@ export class DropdownMenuItem extends Phaser.GameObjects.Container {
 
         const buttonWidth = buttonDesign.dropDown.width - (buttonDesign.dropDown.horizontalPadding * 2);
         const buttonHeight = textHeight + (buttonDesign.dropDownItem.verticalPadding * 2);
+        this.buttonHeight = buttonHeight;
 
-        const button = scene.add.rectangle(
-            0,
-            0,
-            buttonWidth,
-            buttonHeight,
-            params.backgroundColor
+        const icon = scene.add.image(
+            buttonDesign.dropDownItem.horizontalPadding + buttonDesign.icon.width * 0.5,
+            buttonHeight * 0.5,
+            params.icon
         );
-        button.setOrigin(0, 0);
+        this.icon = icon;
+
+        const button = scene.add.graphics({
+            x: 0,
+            y: 0,
+            fillStyle: { color: hexToNumber(styleSchema.backgroundColor) },
+        });
+        button.fillRoundedRect(0, 0, buttonWidth, buttonHeight, 8);
+        button.setInteractive(new Phaser.Geom.Rectangle(0, 0, buttonWidth, buttonHeight), Phaser.Geom.Rectangle.Contains);
+
+        button.on('pointerover', () => {
+            scene.game.canvas.style.cursor = 'pointer';
+
+            button.clear();
+            button.fillStyle(hexToNumber(styleSchema.backgroundColorHover));
+            button.lineStyle(buttonDesign.borderWidth, hexToNumber(styleSchema.borderColor));
+            button.fillRoundedRect(0, 0, buttonWidth, buttonHeight, 8);
+        });
+        button.on('pointerout', () => {
+            scene.game.canvas.style.cursor = 'default';
+
+            button.clear();
+            button.fillStyle(hexToNumber(styleSchema.backgroundColor));
+            button.lineStyle(buttonDesign.borderWidth, hexToNumber(styleSchema.borderColor));
+            button.fillRoundedRect(0, 0, buttonWidth, buttonHeight, 8);
+
+            smoothScale(scene.tweens, this, 1, 125);
+        });
+        button.on('pointerdown', () => {
+            console.log('down');
+            smoothScale(scene.tweens, this, 0.98, 125);
+        });
+        button.on('pointerup', () => {
+            console.log('up');
+            smoothScale(scene.tweens, this, 1, 125);
+        });
         this.button = button;
 
         if (params.onClick) {
@@ -51,7 +91,8 @@ export class DropdownMenuItem extends Phaser.GameObjects.Container {
                 params.onClick && params.onClick(this)
             });
         }
-        this.add([button, text]);
+
+        this.add([button, icon, text]);
     }
 }
 
@@ -59,13 +100,17 @@ export class DropdownMenuItem extends Phaser.GameObjects.Container {
 export interface DropdownMenuParams {
     items: {
         text: string;
+        icon: string;
         onClick?: (item: DropdownMenuItem) => void;
     }[]
-    backgroundColor: number;
-    textColor: string;
+    style: Styles;
 }
 
 export class DropdownMenu extends Phaser.GameObjects.Container {
+    // private readonly container: Phaser.GameObjects.Graphics;
+    // private readonly containerHeight: number;
+    // private readonly items: DropdownMenuItem[];
+
     constructor(
         scene: Phaser.Scene,
         x: number = 0,
@@ -74,6 +119,7 @@ export class DropdownMenu extends Phaser.GameObjects.Container {
     ) {
         super(scene, x, y);
 
+        const styleSchema = params.style === 'dark' ? buttonDesign.dark : buttonDesign.light;
         const itemsContainers: DropdownMenuItem[] = [];
         let totalHeight = buttonDesign.dropDown.verticalPadding;
         params.items.forEach((item) => {
@@ -81,22 +127,43 @@ export class DropdownMenu extends Phaser.GameObjects.Container {
                 scene,
                 buttonDesign.dropDown.horizontalPadding,
                 totalHeight,
-                {...item, backgroundColor: params.backgroundColor, textColor: params.textColor}
+                {...item, style: params.style}
             );
-            totalHeight += itemContainer.button.height;
+            totalHeight += itemContainer.buttonHeight;
             itemsContainers.push(itemContainer);
         });
         totalHeight += buttonDesign.dropDown.verticalPadding;
 
-        const container = scene.add
-            .rectangle(
-                0,
-                0,
-                256,
-                totalHeight,
-                params.backgroundColor
-            )
-            .setOrigin(0, 0);
+        const container = scene.add.graphics({
+            x: 0,
+            y: 0,
+            fillStyle: { color: hexToNumber(styleSchema.backgroundColor) },
+            lineStyle: { width: buttonDesign.borderWidth, color: hexToNumber(styleSchema.borderColor) }
+        });
+        container.fillRoundedRect(0, 0, buttonDesign.dropDown.width, totalHeight, buttonDesign.dropDown.borderRadius);
+        container.strokeRoundedRect(0, 0, buttonDesign.dropDown.width, totalHeight, buttonDesign.dropDown.borderRadius);
         this.add([container, ...itemsContainers]);
+
+        // this.container = container;
+        // this.containerHeight = totalHeight;
+        // this.items = itemsContainers;
     }
+
+    /* public setSchema(schema: typeof buttonDesign.dark) {
+        this.repaintBackground(schema.backgroundColor, schema.borderColor);
+        this.items.forEach((item) => {
+            item.button.setFillStyle(hexToNumber(schema.backgroundColor));
+            // todo change the icon
+            // item.icon.setTint(hexToNumber(schema.fontColor));
+            item.text.setColor(schema.fontColor);
+        });
+    } */
+
+    /* private repaintBackground(backgroundColor: string, borderColor: string) {
+        this.container.clear();
+        this.container.fillStyle(hexToNumber(backgroundColor));
+        this.container.lineStyle(buttonDesign.borderWidth, hexToNumber(borderColor));
+        this.container.fillRoundedRect(0, 0, buttonDesign.dropDown.width, this.containerHeight, buttonDesign.borderRadius);
+        this.container.strokeRoundedRect(0, 0, buttonDesign.dropDown.width, this.containerHeight, buttonDesign.borderRadius);
+    } */
 }

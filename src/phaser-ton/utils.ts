@@ -12,3 +12,17 @@ export function rawAddressToFriendly(address: string, shorten = false) {
 
     return result.substring(0, 4) + '...' + result.substring(result.length - 4);
 }
+
+export function smoothScale(
+    manager: Phaser.Tweens.TweenManager,
+    obj: object|object[],
+    scaleValue: number,
+    duration: number
+) {
+    manager.add({
+        targets: obj,
+        scaleX: scaleValue,
+        scaleY: scaleValue,
+        duration: duration,
+    });
+}
