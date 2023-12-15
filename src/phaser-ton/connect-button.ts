@@ -1,4 +1,4 @@
-import TonConnect, { Wallet, WalletConnectionSource } from "@tonconnect/sdk";
+import TonConnect, { TonConnectOptions, Wallet, WalletConnectionSource } from "@tonconnect/sdk";
 import { Locale, Locales, Styles } from "./protocol";
 import { DropdownMenu, DropdownMenuItem } from "./dropdown";
 import { buttonDesign, locales, DARK_COPY, DARK_DIAMOND, DARK_DISCONNECT, LIGHT_COPY, LIGHT_DIAMOND, LIGHT_DISCONNECT } from "./consts"
@@ -6,14 +6,29 @@ import { hexToNumber, rawAddressToFriendly, smoothScale } from "./utils";
 import { getConnector } from "./connect";
 import { redirectToTelegram } from "./tma-web-api";
 
-export let connectedWallet: Wallet | null = null;
+let connectedWallet: Wallet | null = null;
+export function getConnectedWallet(): Wallet | null {
+    return connectedWallet;
+}
+
+export function restoreWalletConnection(options?: TonConnectOptions) {
+    return new Promise<Wallet | null>((resolve, reject) => {
+        const connector = getConnector(options);
+        connector.restoreConnection().then(() => {
+            connectedWallet = connector.wallet;
+            resolve(connectedWallet);
+        }).catch((error) => {
+            reject(error);
+        });
+    });
+}
 
 export interface ConnectTelegramWalletParams {
     style: Styles;
     onWalletChange: (wallet: Wallet | null) => void;
     onError: (error: Error | unknown) => void;
     language?: Locales;
-    appManifestUrl?: string;
+    tonParams?: TonConnectOptions;
 }
 
 export class ConnectTelegramWalletButton extends Phaser.GameObjects.Container {
@@ -44,9 +59,7 @@ export class ConnectTelegramWalletButton extends Phaser.GameObjects.Container {
             bridgeUrl: 'https://bridge.tonapi.io/bridge',
             universalLink: 'https://t.me/wallet?attach=wallet'
         }
-        this.connector = getConnector(
-            params.appManifestUrl ? { manifestUrl: params.appManifestUrl } : undefined
-        );
+        this.connector = getConnector(params.tonParams);
 
         const locale = locales[params.language ?? 'en'];
         this.locale = locale;
@@ -155,26 +168,22 @@ export class ConnectTelegramWalletButton extends Phaser.GameObjects.Container {
         this.add([btnCtr, this.dropdownMenu]);
         scene.add.existing(this);
 
-        console.log('constructor', this.wallet);
-
         this.unsubscribeFromConnector = this.connector.onStatusChange((wallet) => {
-            console.log('changed', wallet);
             connectedWallet = wallet;
             this.wallet = wallet;
 
+            btnCtr.off('pointerdown', this.connectWallet);
+            btnCtr.off('pointerdown', this.toggleDropdownMenu);
+
             if (wallet) {
-                btnCtr.off('pointerdown', this.connectWallet);
                 textObject
                     .setText(rawAddressToFriendly(wallet.account.address, true))
-                    // .setColor(styleSchema.fontColor);
                 btnCtr
-                    // .setFillStyle(backgroundColor)
                     .on('pointerdown', this.toggleDropdownMenu);
 
                 // todo handle style change outside
                 this.setSchema(styleSchema);
             } else {
-                btnCtr.off('pointerdown', this.toggleDropdownMenu);
                 textObject
                     .setText(locale.connectWallet);
                 btnCtr
@@ -182,6 +191,8 @@ export class ConnectTelegramWalletButton extends Phaser.GameObjects.Container {
 
                 this.setSchema(buttonDesign.default);
             }
+
+            this.params.onWalletChange(wallet);
         });
 
         this.connector.restoreConnection().then(() => {
@@ -194,6 +205,8 @@ export class ConnectTelegramWalletButton extends Phaser.GameObjects.Container {
 
             this.enable();
         });
+
+        this.setSize(this.buttonWidth, this.buttonHeight);
     }
 
     private connectWallet = () => {
@@ -260,24 +273,7 @@ export class ConnectTelegramWalletButton extends Phaser.GameObjects.Container {
         this.dropdownMenu.setVisible(!this.dropdownMenu.visible);
     }
 
-    // todo setStyle for changing it from outside
-    /* public setStyle(style: Styles) {
-        if (this.params.style === style) {
-            return;
-        }
-
-        this.params.style = style;
-        const schema = style === 'dark' ? buttonDesign.dark : buttonDesign.light;
-        this.setSchema(schema);
-        this.dropdownMenu.setSchema(schema);
-    } */
-
     private setSchema(schema: typeof buttonDesign.dark) {
-        /* this.buttonBackground.clear();
-        this.buttonBackground.fillStyle(hexToNumber(schema.backgroundColor));
-        this.buttonBackground.lineStyle(1, hexToNumber(schema.borderColor));
-        this.buttonBackground.fillRoundedRect(0, 0, this.buttonWidth, this.buttonHeight, buttonDesign.borderRadius); */
-
         this.repaintButtonBackground(schema.backgroundColor, schema.borderColor);
         this.buttonIcon.setTexture(schema.icons.diamond);
         this.buttonText.setColor(schema.fontColor);
