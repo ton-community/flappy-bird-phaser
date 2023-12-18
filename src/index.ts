@@ -6,8 +6,8 @@ import { UI } from './ui';
 import { ConnectWalletHtmlScene } from './connect-wallet-html';
 import { ConnectWalletCanvasScene } from './connect-wallet-canvas';
 
-const GAME_HEIGHT = 600;
-const GAME_WIDTH = 2400;
+const GAME_HEIGHT = window.innerHeight;
+const GAME_WIDTH = window.innerWidth;
 const GAP_START = GAME_HEIGHT / 6;
 const GAP_MIN = 125;
 const GAP_MAX = 175;
@@ -207,7 +207,7 @@ const tc = new TonConnectUI({
 
 const game = new Phaser.Game({
     type: Phaser.AUTO,
-    height: GAME_WIDTH,
+    height: GAME_HEIGHT,
     width: GAME_WIDTH,
     scene: [new MyScene(new UI(tc))],
     physics: {
@@ -217,8 +217,7 @@ const game = new Phaser.Game({
         keyboard: true,
     },
     scale: {
-        mode: Phaser.Scale.HEIGHT_CONTROLS_WIDTH,
-        autoCenter: Phaser.Scale.CENTER_VERTICALLY,
+        mode: Phaser.Scale.NONE,
         parent: document.body,
         width: GAME_WIDTH,
         height: GAME_HEIGHT,
@@ -255,6 +254,7 @@ function walletChanged(wallet: Wallet | null) {
             if (!game.scene.isActive(ConnectWalletCanvasScene.sceneKey)) {
                 game.scene.add(ConnectWalletCanvasScene.sceneKey, connectUICanvas, true);
             }
+            connectUICanvas.toRight();
         }
     } else {
         gameUi.transitionOutOfGame();
@@ -268,6 +268,7 @@ function walletChanged(wallet: Wallet | null) {
             if (!game.scene.isActive(ConnectWalletCanvasScene.sceneKey)) {
                 game.scene.add(ConnectWalletCanvasScene.sceneKey, connectUICanvas, true);
             }
+            connectUICanvas.toCenter();
         }
     }
 }

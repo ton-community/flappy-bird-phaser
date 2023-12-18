@@ -5,6 +5,7 @@ import { buttonDesign, locales, DARK_COPY, DARK_DIAMOND, DARK_DISCONNECT, LIGHT_
 import { hexToNumber, rawAddressToFriendly, smoothScale } from "./utils";
 import { getConnector } from "./connect";
 import { redirectToTelegram } from "./tma-web-api";
+import { loadIcons } from "./icons";
 
 let connectedWallet: Wallet | null = null;
 export function getConnectedWallet(): Wallet | null {
@@ -35,7 +36,7 @@ export class ConnectTelegramWalletButton extends Phaser.GameObjects.Container {
     buttonContainer: Phaser.GameObjects.Container;
     buttonBackground: Phaser.GameObjects.Graphics;
     buttonText: Phaser.GameObjects.Text;
-    buttonIcon: Phaser.GameObjects.Image;
+    buttonIcon?: Phaser.GameObjects.Image;
     buttonWidth: number;
     buttonHeight: number;
     wallet: Wallet | null = null;
@@ -43,8 +44,10 @@ export class ConnectTelegramWalletButton extends Phaser.GameObjects.Container {
     connectionSource: WalletConnectionSource;
     connector: TonConnect;
     unsubscribeFromConnector: () => void;
-    dropdownMenu: DropdownMenu;
+    dropdownMenu?: DropdownMenu;
     locale: Locale;
+    currentIcon: string;
+    changeIconTimer: NodeJS.Timeout | number | null = null;
 
     constructor(
         scene: Phaser.Scene,
@@ -60,12 +63,11 @@ export class ConnectTelegramWalletButton extends Phaser.GameObjects.Container {
             universalLink: 'https://t.me/wallet?attach=wallet'
         }
         this.connector = getConnector(params.tonParams);
+        this.loadAssets(scene);
 
         const locale = locales[params.language ?? 'en'];
         this.locale = locale;
         const styleSchema = params.style === 'dark' ? buttonDesign.dark : buttonDesign.light;
-        /* const textColor = params.style === 'dark'
-            ? buttonDesign.darkFontColor : buttonDesign.lightFontColor; */
         const backgroundColor = params.style === 'dark'
             ? hexToNumber(styleSchema.backgroundColor) : hexToNumber(styleSchema.backgroundColor);
 
@@ -93,19 +95,13 @@ export class ConnectTelegramWalletButton extends Phaser.GameObjects.Container {
         this.buttonWidth = buttonWidth;
         this.buttonHeight = buttonHeight;
 
-        const icon = scene.add.image(
-            buttonDesign.horizontalPadding - buttonDesign.icon.horizontalPadding + buttonDesign.icon.width * 0.5,
-            buttonHeight * 0.5,
-            params.style === 'dark' ? DARK_DIAMOND : LIGHT_DIAMOND
-        );
-        this.buttonIcon = icon;
+        this.currentIcon = styleSchema.icons.diamond;
 
         const button = scene.add.graphics({
             x: 0,
             y: 0,
             fillStyle: { color: this.wallet == null ? hexToNumber(styleSchema.backgroundColor) : backgroundColor },
             lineStyle: { width: buttonDesign.borderWidth, color: hexToNumber(styleSchema.borderColor) }
-            // lineStyle: { width: 5, color: 0xff0000 }
         });
         button.fillRoundedRect(0, 0, buttonWidth, buttonHeight, buttonDesign.borderRadius);
         button.strokeRoundedRect(0, 0, buttonWidth, buttonHeight, buttonDesign.borderRadius);
@@ -135,38 +131,8 @@ export class ConnectTelegramWalletButton extends Phaser.GameObjects.Container {
 
         this.buttonContainer = btnCtr;
 
-        this.dropdownMenu = new DropdownMenu(
-            scene,
-            0,
-            buttonHeight + buttonDesign.dropDown.topMargin,
-            {
-                style: params.style,
-                items: [
-                    {
-                        icon: params.style === 'dark' ? DARK_COPY : LIGHT_COPY,
-                        text: locale.copyAddress,
-                        onClick: this.copyAddress,
-                    },
-                    {
-                        icon: params.style === 'dark' ? DARK_DISCONNECT : LIGHT_DISCONNECT,
-                        text: locale.disconnectWallet,
-                        onClick: () => {
-                            this.toggleDropdownMenu();
-                            this.disconnectWallet();
-                        }
-                    },
-                ]
-            }
-        );
-        this.dropdownMenu.setVisible(false);
-
 
         textObject.setText('...');
-        btnCtr.add([button, icon, textObject]);
-        // btnCtr.setInteractive(new Phaser.Geom.Rectangle(0, 0, buttonWidth, buttonHeight), Phaser.Geom.Rectangle.Contains);
-
-        this.add([btnCtr, this.dropdownMenu]);
-        scene.add.existing(this);
 
         this.unsubscribeFromConnector = this.connector.onStatusChange((wallet) => {
             connectedWallet = wallet;
@@ -177,7 +143,7 @@ export class ConnectTelegramWalletButton extends Phaser.GameObjects.Container {
 
             if (wallet) {
                 textObject
-                    .setText(rawAddressToFriendly(wallet.account.address, true))
+                    .setText(rawAddressToFriendly(wallet.account.address, true));
                 btnCtr
                     .on('pointerdown', this.toggleDropdownMenu);
 
@@ -207,6 +173,66 @@ export class ConnectTelegramWalletButton extends Phaser.GameObjects.Container {
         });
 
         this.setSize(this.buttonWidth, this.buttonHeight);
+    }
+
+    private loadAssets(scene: Phaser.Scene) {
+        loadIcons(scene.textures).then(() => {
+            const icon = scene.add.image(
+                buttonDesign.horizontalPadding - buttonDesign.icon.horizontalPadding + buttonDesign.icon.width * 0.5,
+                this.buttonHeight * 0.5,
+                this.currentIcon
+            );
+            this.buttonIcon = icon;
+
+            this.dropdownMenu = new DropdownMenu(
+                scene,
+                0,
+                this.buttonHeight + buttonDesign.dropDown.topMargin,
+                {
+                    style: this.params.style,
+                    items: [
+                        {
+                            icon: this.params.style === 'dark' ? DARK_COPY : LIGHT_COPY,
+                            text: this.locale.copyAddress,
+                            onClick: this.copyAddress,
+                        },
+                        {
+                            icon: this.params.style === 'dark' ? DARK_DISCONNECT : LIGHT_DISCONNECT,
+                            text: this.locale.disconnectWallet,
+                            onClick: () => {
+                                this.toggleDropdownMenu();
+                                this.disconnectWallet();
+                            }
+                        },
+                    ]
+                }
+            );
+            this.dropdownMenu.setVisible(false);
+
+            this.buttonContainer.add([this.buttonBackground, this.buttonIcon, this.buttonText]);
+            this.add([this.buttonContainer, this.dropdownMenu]);
+            scene.add.existing(this);
+        });
+    }
+
+    private changeIcon(icon: string) {
+        this.cancelIconChange();
+
+        if (this.buttonIcon) {
+            this.currentIcon = icon;
+            this.buttonIcon.setTexture(icon);
+        } else {
+            this.changeIconTimer = setTimeout(() => {
+                this.changeIcon(icon);
+            }, 4);
+        }
+    }
+
+    private cancelIconChange() {
+        if (this.changeIconTimer !== null) {
+            clearTimeout(this.changeIconTimer);
+            this.changeIconTimer = null;
+        }
     }
 
     private connectWallet = () => {
@@ -270,12 +296,16 @@ export class ConnectTelegramWalletButton extends Phaser.GameObjects.Container {
     }
 
     private toggleDropdownMenu = () => {
+        if (this.dropdownMenu == null) {
+            return;
+        }
+
         this.dropdownMenu.setVisible(!this.dropdownMenu.visible);
     }
 
     private setSchema(schema: typeof buttonDesign.dark) {
         this.repaintButtonBackground(schema.backgroundColor, schema.borderColor);
-        this.buttonIcon.setTexture(schema.icons.diamond);
+        this.changeIcon(schema.icons.diamond);
         this.buttonText.setColor(schema.fontColor);
     }
 
@@ -289,6 +319,7 @@ export class ConnectTelegramWalletButton extends Phaser.GameObjects.Container {
 
     public destroy() {
         this.unsubscribeFromConnector();
+        this.cancelIconChange();
         // todo Will the super destroy() call remove all listeners?
         /* this.buttonContainer.removeAllListeners();
         this.buttonContainer.destroy(); */

@@ -1,5 +1,4 @@
 import { ConnectTelegramWalletButton, ConnectTelegramWalletParams } from "./phaser-ton";
-import { loadIcons } from "./phaser-ton/icons";
 
 export class ConnectWalletCanvasScene extends Phaser.Scene {
     public static sceneKey = 'ConnectWalletCanvasScene';
@@ -10,14 +9,25 @@ export class ConnectWalletCanvasScene extends Phaser.Scene {
     }
 
     create() {
-        // todo load icons in ConnectTelegramWalletButton
-        loadIcons(this.textures).then(() =>{
-            this.button = new ConnectTelegramWalletButton(
-                this,
-                0,
-                0,
-                this.params
-            );
-        });
+        this.button = new ConnectTelegramWalletButton(
+            this,
+            0,
+            0,
+            this.params
+        );
+    }
+
+    toCenter() {
+        this.button.setPosition(
+            this.game.scale.displaySize.width * 0.5 - this.button.width * 0.5,
+            this.game.scale.displaySize.height * 0.5 - this.button.height * 0.5
+        );
+    }
+
+    toRight() {
+        this.button.setPosition(
+            this.game.scale.displaySize.width - this.button.width - 16,
+            16
+        );
     }
 }
