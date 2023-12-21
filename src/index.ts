@@ -1,18 +1,30 @@
 import * as Phaser from 'phaser';
 import { TonConnectUI } from '@tonconnect/ui';
 import { Address, beginCell } from '@ton/core';
-import { getHttpV4Endpoint } from '@orbs-network/ton-access';
+import { getHttpV4Endpoint, Network } from '@orbs-network/ton-access';
 import { TonClient4 } from '@ton/ton';
+import { environment } from "./environment";
+
+const ENDPOINT = environment.ENDPOINT;
 
 const PIPES_AVAILABLE = ['pipe-green', 'pipe-red'];
 const PIPES_COSTS = [0, 1];
-const ENDPOINT = 'https://flappy.krigga.dev';
-const TOKEN_RECIPIENT = 'EQBb7bFnXnKAN1DNO3GPKLXPNiEyi4U6-805Y-aBkgJtK_lJ';
-const TOKEN_MASTER = 'EQBcRUiCkgdfnbnKKYhnPXkNi9BXkq_5uLGRuvnwwaZzelit';
-const NETWORK = 'testnet';
-
 const SHOP_RELOAD_INTERVAL = 10000;
 const BALANCE_RELOAD_INTERVAL = 10000;
+
+export type ConfigResponse =
+    {
+        ok: false
+    } |
+    {
+        ok: true,
+        config: {
+            network: Network,
+            tokenMinter: string,
+            tokenRecipient: string,
+            achievementCollection: Record<string, string>,
+        }
+    }
 
 class UI {
     scoreDiv: HTMLDivElement = document.getElementById('score') as HTMLDivElement;
@@ -49,6 +61,8 @@ class UI {
     client: TonClient4 | undefined = undefined;
     jettonWallet: Address | undefined = undefined;
 
+    config: ConfigResponse | null = null;
+
     async redrawBalance() {
         const bal = await this.getBalance();
         this.balanceDiv.innerText = bal.toString();
@@ -70,6 +84,8 @@ class UI {
 
     async getJettonWallet() {
         if (this.jettonWallet === undefined) {
+            const TOKEN_MASTER = await this.getTokenMinter();
+
             const client = await this.getClient();
             if (tc.account === null) {
                 throw new Error('No account');
@@ -88,6 +104,8 @@ class UI {
 
     async getClient() {
         if (this.client === undefined) {
+            const NETWORK = await this.getNetwork();
+
             this.client = new TonClient4({
                 endpoint: await getHttpV4Endpoint({ network: NETWORK }),
             });
@@ -96,6 +114,8 @@ class UI {
     }
 
     async buy(itemId: number) {
+        const TOKEN_RECIPIENT = await this.getTokenRecipient();
+
         await tc.sendTransaction({
             validUntil: Math.floor(Date.now() / 1000) + 3600,
             messages: [
@@ -218,6 +238,39 @@ class UI {
         } catch (e) {}
 
         this.reloadShopTimeout = setTimeout(() => this.reloadPurchases(), SHOP_RELOAD_INTERVAL);
+    }
+
+    async getConfig(): Promise<ConfigResponse> {
+        if (this.config) {
+            return this.config;
+        }
+
+        const config: ConfigResponse = await (await fetch(ENDPOINT + '/config', {
+            headers: {
+            'ngrok-skip-browser-warning': 'true'
+            }
+        })).json();
+        this.config = config;
+
+        return config;
+    }
+
+    async getNetwork(): Promise<Network> {
+        const config = await this.getConfig();
+        if (!config.ok) throw new Error('Unsuccessful');
+        return config.config.network;
+    }
+
+    async getTokenMinter(): Promise<string> {
+        const config = await this.getConfig();
+        if (!config.ok) throw new Error('Unsuccessful');
+        return config.config.tokenMinter;
+    }
+
+    async getTokenRecipient(): Promise<string> {
+        const config = await this.getConfig();
+        if (!config.ok) throw new Error('Unsuccessful');
+        return config.config.tokenRecipient;
     }
 
     async showShop() {
