@@ -3,7 +3,15 @@
   "version": "0.0.1",
   "private": true,
   "license": "MIT",
+  "scripts": {
+    "build": "webpack --mode production",
+    "dev": "webpack serve --mode development",
+    "start": "npm run dev"
+  },
   "devDependencies": {
+    "copy-webpack-plugin": "^11.0.0",
+    "html-loader": "^4.2.0",
+    "html-webpack-plugin": "^5.5.3",
     "ts-loader": "^9.4.4",
     "typescript": "^5.1.6",
     "webpack": "^5.88.2",
@@ -12,7 +20,7 @@
   },
   "dependencies": {
     "@orbs-network/ton-access": "^2.3.3",
-    "@ton/core": "^0.52.2",
+    "@ton/core": "^0.53.0",
     "@ton/crypto": "^3.2.0",
     "@ton/ton": "^13.5.1",
     "@tonconnect/ui": "^2.0.0-beta.2",
